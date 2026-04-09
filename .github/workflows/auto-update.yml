@@ -1,0 +1,39 @@
+name: Auto-Update Data & Deploy
+
+on:
+  schedule:
+    # Corre todos los días a las 8:00 AM UTC (5:00 AM Argentina)
+    - cron: '0 8 * * *'
+  # También permite trigger manual desde GitHub
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          pip install requests
+          
+      - name: Fetch latest data
+        run: python fetch_data.py --update
+        
+      - name: Build standalone HTML
+        run: python build_standalone.py
+        
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "chore: auto-update data $(date +'%Y-%m-%d')" || echo "No changes"
+          git push
