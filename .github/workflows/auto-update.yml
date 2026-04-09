@@ -3,7 +3,7 @@ name: Auto-Update Data & Deploy
 on:
   schedule:
     # Corre todos los días a las 8:00 AM UTC (5:00 AM Argentina)
-    - cron: '0 8 * * *'
+    - cron: '0 21 * * *'
   # También permite trigger manual desde GitHub
   workflow_dispatch:
 
