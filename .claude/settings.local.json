@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Read(//c/Program Files/nodejs/**)",
+      "Read(//c/Users/HP/OneDrive/Desktop/Banda variable/Local/Programs/node/**)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3 fetch_data.py --desde 2022-01-01)",
+      "Bash(python3 -u fetch_data.py --desde 2022-01-01)",
+      "Bash(python3 fetch_data.py --update)",
+      "Bash(python fetch_data.py --update)",
+      "Bash(python fetch_data.py)",
+      "Bash(python build_standalone.py)",
+      "Bash(python build_standalone_v2.py)",
+      "Bash(python build_standalone_iphone.py)",
+      "Bash(python fetch_news.py)",
+      "Bash(python3)"
+    ]
+  }
+}

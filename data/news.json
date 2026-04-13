@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "results": [
+    {
+      "title": "Banco Central compra divisas y acumula reservas",
+      "link": "https://www.ambito.com",
+      "pubDate": "2026-04-13T00:00:00Z",
+      "summary": "El Banco Central adquirio USD 320 millones en operaciones de mercado abierto",
+      "source": "Ambito Financiero"
+    },
+    {
+      "title": "Dolar mayorista cierra con presion alcista",
+      "link": "https://www.cronista.com",
+      "pubDate": "2026-04-12T00:00:00Z",
+      "summary": "El dolar mayorista acumula presion alcista en operaciones interbancarias",
+      "source": "El Cronista"
+    },
+    {
+      "title": "FMI aprob nuevo desembolso para Argentina",
+      "link": "https://www.infobea.com",
+      "pubDate": "2026-04-11T00:00:00Z",
+      "summary": "El directorio del FMI aprob transferencia de USD 800M como parte del acuerdo",
+      "source": "Infobea"
+    },
+    {
+      "title": "Ministro de economia analiza medidas cambiarias",
+      "link": "https://www.lanacion.com.ar",
+      "pubDate": "2026-04-10T00:00:00Z",
+      "summary": "El ministro evalua ajustes en el tipo de cambio de referencia",
+      "source": "La Nacion"
+    },
+    {
+      "title": "Liquidacion de soja mantiene presion",
+      "link": "https://www.iprofesional.com",
+      "pubDate": "2026-04-09T00:00:00Z",
+      "summary": "Productores de soja continuan liquidando divisas en mercado spot",
+      "source": "iProfesional"
+    }
+  ],
+  "count": 5,
+  "fetchedAt": "2026-04-13T00:00:00Z"
+}

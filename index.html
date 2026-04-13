@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banda Cambiaria ARS/USD | Tetra Pak Argentina</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Plotly.js CDN (cargado de forma diferida) -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+</head>
+<body>
+
+<!-- ── Loading overlay ──────────────────────────────────────── -->
+<div id="loading-spinner">
+  <div class="spinner"></div>
+  <span>Cargando datos…</span>
+</div>
+
+<div id="app">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <h1>📊 <span>Banda Cambiaria</span> ARS/USD</h1>
+      <span class="subtitle">Monitor interno Tetra Pak Argentina · Promedio semanal ±5% · Fuente: Banco Nación</span>
+    </div>
+    <div class="header-right">
+      <span id="last-update" class="last-update">--</span>
+      <div style="display:flex;gap:6px;">
+        <button id="export-csv-btn"  class="btn btn-secondary btn-sm" title="Exportar tabla a CSV">⬇ CSV</button>
+        <button id="export-png-btn"  class="btn btn-secondary btn-sm" title="Exportar gráfico a PNG">🖼 PNG</button>
+        <button id="export-pdf-btn"  class="btn btn-secondary btn-sm" title="Imprimir / Guardar PDF">🖨 PDF</button>
+      </div>
+      <button id="refresh-btn"    class="btn btn-primary">↻ Actualizar</button>
+      <button id="dark-mode-btn"  class="btn btn-icon" title="Cambiar tema">🌙</button>
+    </div>
+  </header>
+
+  <!-- ── Banners ────────────────────────────────────────────── -->
+  <div id="demo-banner" class="demo-banner" style="display:none">
+    ⚠️ <b>Modo demostración:</b> los datos que se muestran son sintéticos. Para datos reales, iniciá el servidor proxy (<code>npm start</code>) con conexión a internet.
+  </div>
+  <div id="alert-banner" class="alert-banner hidden"></div>
+  <div id="status-msg" class="status-msg"></div>
+
+  <!-- ── Status banner ──────────────────────────────────────── -->
+  <div id="status-banner" class="status-banner status-neutral">Estado actual: Sin datos</div>
+
+  <!-- ── KPIs ───────────────────────────────────────────────── -->
+  <div class="kpi-grid">
+    <div class="kpi-card" id="kpi-dollar">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">USD Mayorista A3500 (últ. cierre)</div>
+    </div>
+    <div class="kpi-card" id="kpi-center">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Centro de banda actual</div>
+    </div>
+    <div class="kpi-card" id="kpi-upper">
+      <div class="kpi-value negative">--</div>
+      <div class="kpi-label">Límite superior (+5%)</div>
+    </div>
+    <div class="kpi-card" id="kpi-lower">
+      <div class="kpi-value positive">--</div>
+      <div class="kpi-label">Límite inferior (-5%)</div>
+    </div>
+    <div class="kpi-card" id="kpi-gap-upper">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Dist. al techo</div>
+    </div>
+    <div class="kpi-card" id="kpi-gap-lower">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Dist. al piso</div>
+    </div>
+    <div class="kpi-card" id="kpi-weekly-avg">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Promedio semanal BNA</div>
+    </div>
+    <div class="kpi-card" id="kpi-effective-date">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Fecha efectiva ajuste</div>
+    </div>
+    <div class="kpi-card" id="kpi-prob">
+      <div class="kpi-value">--%</div>
+      <div class="kpi-label">Prob. cambio próx. semana</div>
+    </div>
+    <div class="kpi-card" id="kpi-bpi">
+      <div class="kpi-value">--</div>
+      <div class="kpi-label">Band Pressure Index</div>
+    </div>
+    <div class="kpi-card" id="kpi-status">
+      <div class="kpi-value status-badge">Sin datos</div>
+      <div class="kpi-label">Estado actual</div>
+    </div>
+  </div>
+
+  <!-- ── Gráfico principal ──────────────────────────────────── -->
+  <div class="section">
+    <div class="chart-header">
+      <div class="section-title" style="margin:0">
+        <span class="section-icon">📈</span>
+        USD Mayorista vs Banda Interna
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="period-btns">
+          <button class="period-btn" data-period="1m">1M</button>
+          <button class="period-btn active" data-period="3m">3M</button>
+          <button class="period-btn" data-period="6m">6M</button>
+          <button class="period-btn" data-period="12m">12M</button>
+          <button class="period-btn" data-period="ytd">YTD</button>
+          <button class="period-btn" data-period="all">Todo</button>
+        </div>
+      </div>
+    </div>
+    <div id="main-chart"></div>
+  </div>
+
+  <!-- ── Semana actual ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">📅</span>
+      Estado de la Semana Actual — Promedio BNA vs Banda
+    </div>
+    <div class="section-subtitle">Regla oficial: si el promedio de los 5 días hábiles (lun–vie) excede ±5% del centro, el precio se ajusta el lunes siguiente.</div>
+    <div id="current-week-panel"><p class="muted">Cargando…</p></div>
+  </div>
+
+  <!-- ── Probabilidad + variación diaria (dos columnas) ─────── -->
+  <div class="two-col">
+
+    <!-- Probabilidad -->
+    <div class="section">
+      <div class="section-title">
+        <span class="section-icon">🎯</span>
+        Probabilidad de Cambio de Banda — Próxima Semana
+      </div>
+      <div id="prob-gauge"></div>
+      <div id="prob-breakdown"></div>
+      <div id="prob-explain" class="prob-explain" style="margin-top:10px">
+        Cargando análisis…
+      </div>
+    </div>
+
+    <!-- Presión de banda -->
+    <div class="section">
+      <div class="section-title">
+        <span class="section-icon">📊</span>
+        Band Pressure Index
+      </div>
+      <div class="section-subtitle">0 = en el piso · 50 = centro · 100 = en el techo. Rojo = presión alcista, azul = bajista.</div>
+      <div id="pressure-chart"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Variación diaria sparkline + tabla ─────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">📋</span>
+      Variación Diaria del USD Mayorista
+    </div>
+    <div id="return-sparkline" style="min-height:180px"></div>
+    <div class="table-wrapper" style="margin-top:12px;max-height:400px;overflow-y:auto">
+      <table class="data-table" id="daily-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>USD Mayorista</th>
+            <th>Var. ARS</th>
+            <th>Var. %</th>
+            <th>Centro</th>
+            <th>Superior</th>
+            <th>Inferior</th>
+            <th>Desvío vs centro</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody><tr><td colspan="9" style="text-align:center;color:#94a3b8">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Historial de señales ────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">🔔</span>
+      Historial de Cambios de Banda
+    </div>
+    <div class="section-subtitle">Semanas donde el promedio BNA superó ±5% del centro. Ajuste efectivo el lunes siguiente.</div>
+    <div class="table-wrapper">
+      <table class="data-table" id="signals-table">
+        <thead>
+          <tr>
+            <th>Semana</th>
+            <th>Fecha efectiva</th>
+            <th>Promedio BNA</th>
+            <th>Variación %</th>
+            <th>Dirección</th>
+            <th>Centro prev → nuevo</th>
+            <th>Aj. PM/Straws (86%)</th>
+            <th>Aj. AM/TRC (100%)</th>
+            <th>Pérdida USD</th>
+          </tr>
+        </thead>
+        <tbody><tr><td colspan="9" style="text-align:center;color:#94a3b8">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tracker pérdida USD ────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">💲</span>
+      Tracker de Pérdida Acumulada en USD
+    </div>
+    <div class="section-subtitle">
+      Cada salto alcista de banda ajusta el PM al 86% de la variación FX → precio en USD cae ≈0.7% por salto.
+      Cada 6 saltos se recomienda un incremento fuera de banda del ~5%.
+    </div>
+    <div id="usd-tracker-panel"><p class="muted">Cargando…</p></div>
+  </div>
+
+  <!-- ── Noticias ────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">📰</span>
+      Noticias y Contexto Macroeconómico
+      <button id="refresh-news-btn" class="btn btn-secondary btn-sm" style="margin-left:auto">↻ Refrescar</button>
+    </div>
+    <div class="news-pressure-bar">
+      <span>News Pressure Score:</span>
+      <span id="news-pressure-score" class="pressure-value pressure-neutral">0</span>
+      <span class="muted">(-100 = máx. presión bajista · +100 = máx. presión alcista)</span>
+    </div>
+    <div id="news-cards" class="news-grid">
+      <p class="muted">Cargando noticias…</p>
+    </div>
+  </div>
+
+  <!-- ── Backtesting ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">📉</span>
+      Backtesting del Modelo
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <label style="font-size:.78rem;color:var(--text-muted);font-weight:400">Ventana:</label>
+        <select id="backtest-window" class="form-group" style="width:auto;padding:4px 8px;font-size:.78rem">
+          <option value="all">Todo el historial</option>
+          <option value="6">Últimos 6 meses</option>
+          <option value="12">Últimos 12 meses</option>
+          <option value="24">Últimos 24 meses</option>
+        </select>
+      </div>
+    </div>
+    <div class="two-col">
+      <div>
+        <div id="backtest-chart"></div>
+      </div>
+      <div>
+        <div id="backtest-metrics"><p class="muted">Calculando métricas…</p></div>
+        <h4 style="font-size:.82rem;margin:14px 0 6px;color:var(--text-muted)">Matriz de confusión</h4>
+        <div id="confusion-matrix"></div>
+      </div>
+    </div>
+    <h4 style="font-size:.82rem;margin:14px 0 6px;color:var(--text-muted)">Calibración de probabilidades</h4>
+    <div id="calibration-table"></div>
+  </div>
+
+  <!-- ── Configuración ──────────────────────────────────────── -->
+  <div class="section" id="config-section">
+    <div class="section-title">
+      <span class="section-icon">⚙️</span>
+      Configuración de Parámetros
+    </div>
+    <form id="config-form">
+      <div class="config-grid">
+        <div class="form-group" style="border:1px solid var(--accent);border-radius:var(--radius);padding:10px;background:rgba(37,99,235,.05)">
+          <label for="cfg-operative-center"><b>Centro operativo actual (Tetra Pak — HOY)</b></label>
+          <input type="number" id="cfg-operative-center" step="0.01" value="1444.8" />
+          <small style="color:var(--accent);font-size:.7rem;margin-top:2px;display:block">
+            ⭐ Valor real de Tetra Pak hoy. Todas las métricas (probabilidad, umbrales) se calculan sobre este número.
+          </small>
+        </div>
+        <div class="form-group">
+          <label for="cfg-center">Centro inicial (para contexto histórico)</label>
+          <input type="number" id="cfg-center" step="0.01" value="1444.8" />
+          <small style="color:var(--text-muted);font-size:.7rem;margin-top:2px;display:block">
+            Solo para backtest/historial. No afecta cálculos actuales.
+          </small>
+        </div>
+        <div class="form-group">
+          <label for="cfg-margin">Margen de banda (%)</label>
+          <input type="number" id="cfg-margin" step="0.1" min="0.1" max="50" value="5" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-pm-factor">Factor ajuste PM / Straws (%)</label>
+          <input type="number" id="cfg-pm-factor" step="1" min="0" max="100" value="86" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-am-factor">Factor ajuste AM / TRC (%)</label>
+          <input type="number" id="cfg-am-factor" step="1" min="0" max="100" value="100" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-news-adj">Ajuste máx. por noticias (pp)</label>
+          <input type="number" id="cfg-news-adj" step="1" min="0" max="30" value="10" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-knn-k">Vecinos históricos (K)</label>
+          <input type="number" id="cfg-knn-k" step="1" min="5" max="100" value="30" />
+        </div>
+        <div class="form-group">
+          <label for="cfg-history">Historial para modelo (meses, 0=todo)</label>
+          <input type="number" id="cfg-history" step="6" min="0" max="120" value="0" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Aplicar configuración y recalcular</button>
+    </form>
+  </div>
+
+  <!-- ── Explicación ────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="section-icon">🔍</span>
+      Cómo Se Calculó — Transparencia del Modelo
+    </div>
+
+    <h4 style="font-size:.84rem;margin-bottom:6px;color:var(--text-muted)">
+      Ventana de evaluación actual (5 días hábiles)
+    </h4>
+    <div id="explain-window" class="explain-block">Cargando…</div>
+
+    <h4 style="font-size:.84rem;margin:12px 0 6px;color:var(--text-muted)">
+      Componentes de la probabilidad
+    </h4>
+    <div id="explain-probability" class="explain-block">Cargando…</div>
+
+    <h4 style="font-size:.84rem;margin:12px 0 6px;color:var(--text-muted)">
+      Metodología resumida
+    </h4>
+    <div class="explain-block">
+      <b>Regla de banda Tetra Pak (oficial):</b> Se calcula el <b>promedio semanal</b>
+      del tipo de cambio <b>Banco Nación (USD)</b> de los 5 días hábiles lunes–viernes.
+      Si el promedio supera el <b>+5%</b> o baja del <b>−5%</b> del centro de banda vigente,
+      se activa un cambio de banda. El <b>nuevo centro</b> es el promedio semanal que disparó la regla.
+      Feriados se reemplazan por el día hábil inmediatamente anterior.
+      El ajuste de precio toma efecto el <b>lunes de la semana siguiente</b>.
+      <br><br>
+      <b>Ajuste de precio por producto:</b>
+      <b>PM y Straws</b> → <b>86%</b> de la variación del tipo de cambio.
+      <b>AM y TRC</b> → <b>100%</b> de la variación del tipo de cambio.
+      Por cada salto alcista, el precio en USD del PM cae ≈0.67% (pérdida por ajuste parcial).
+      Cada 6 saltos se recomienda un incremento fuera de banda del ~5% para recuperar margen.
+      <br><br>
+      <b>Probabilidad de cambio:</b> combina (a) un modelo de <b>regresión logística</b>
+      entrenado in-browser sobre toda la historia disponible, (b) una búsqueda de
+      <b>vecinos históricos</b> similares al estado actual, y (c) un <b>ajuste por noticias</b>
+      limitado a ±<span id="explain-news-adj">10</span>pp.
+      <br><br>
+      <b>Fuente de datos:</b> API estadísticas cambiarias BCRA v1
+      (<code>estadisticascambiarias/v1.0/Cotizaciones</code>) · <code>codigoMoneda: USD</code>
+      (Banco Nación, fuente oficial) · Caché local con TTL de 4 horas.
+    </div>
+  </div>
+
+  <!-- ── Log de operaciones ──────────────────────────────────── -->
+  <div class="section" id="log-section">
+    <div class="section-title" style="cursor:pointer" onclick="
+      const el=document.getElementById('log-output');
+      el.style.display=el.style.display==='none'?'block':'none'">
+      <span class="section-icon">📋</span>
+      Log de operaciones
+      <span style="font-size:.72rem;font-weight:400;color:var(--text-muted);margin-left:auto">
+        (click para expandir/colapsar)
+      </span>
+    </div>
+    <div id="log-output" style="display:none"></div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ── Scripts (orden importante) ─────────────────────────────── -->
+<script src="utils.js"></script>
+<script src="dataService.js"></script>
+<script src="rulesEngine.js"></script>
+<script src="probabilityEngine.js"></script>
+<script src="newsService.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+
+<!-- Esperar a Plotly antes de arrancar la app -->
+<script>
+  // Plotly se carga con defer; esperamos a que esté disponible.
+  function waitForPlotly(cb, retries = 20) {
+    if (typeof Plotly !== 'undefined') { cb(); return; }
+    if (retries <= 0) { console.error('Plotly no disponible'); cb(); return; }
+    setTimeout(() => waitForPlotly(cb, retries - 1), 200);
+  }
+  // La inicialización real está en app.js (DOMContentLoaded).
+  // Este bloque solo garantiza que Plotly esté listo si el defer
+  // termina antes del DOMContentLoaded.
+</script>
+
+</body>
+</html>

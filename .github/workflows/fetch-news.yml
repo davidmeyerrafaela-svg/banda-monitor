@@ -1,0 +1,44 @@
+name: Fetch News & Deploy
+
+on:
+  schedule:
+    # Corre todos los días a las 18:00 Argentina (21:00 UTC)
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Fetch latest news
+        run: python fetch_news.py
+
+      - name: Update data and rebuild
+        run: |
+          python fetch_data.py --update
+          python build_standalone.py
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "chore: auto-update news and data $(date +'%Y-%m-%d')" || echo "No changes"
+          git push
+
+      - name: Trigger Vercel redeploy
+        run: |
+          curl -X POST https://api.vercel.com/v1/deployments \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"banda-monitor","gitSource":{"type":"github","org":"davidmeyerrafaela-svg","repo":"banda-monitor","ref":"main"}}'
+        continue-on-error: true

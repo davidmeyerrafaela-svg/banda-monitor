@@ -1,0 +1,21 @@
+{
+  "name": "tetrapak-banda-monitor",
+  "version": "1.0.0",
+  "description": "Monitor de Banda Cambiaria ARS/USD - Tetra Pak Argentina",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0",
+    "xml2js": "^0.6.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "Tetra Pak Argentina",
+  "license": "UNLICENSED"
+}

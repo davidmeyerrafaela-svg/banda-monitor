@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Proxy BCRA + Dashboard (Express)",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server_py.py"],
+      "port": 3000
+    },
+    {
+      "name": "Proxy BCRA + Dashboard (Python)",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server_py.py"],
+      "port": 3000
+    }
+  ]
+}
