@@ -384,6 +384,15 @@ const RulesEngine = (() => {
       const sumSoFar  = avgDays.reduce((s, d) => s + d.value, 0);
       avgNeededForUpper = (currentBand.upper * minDays - sumSoFar) / daysRemaining;
       avgNeededForLower = (currentBand.lower * minDays - sumSoFar) / daysRemaining;
+    } else if (calendarDaysRemaining > 0 && avgDays.length >= minDays && partialAvg !== null) {
+      // Cuando la semana está completa (5 datos) pero faltan días calendario
+      // Calcular qué promedio necesitan los próximos días para mantener el promedio dentro de banda
+      // Asumiendo que el promedio futuro se mantendrá similar
+      avgNeededForUpper = (currentBand.upper * minDays - (partialAvg * minDays - (avgDays[0].value - partialAvg) * (minDays - 1))) / calendarDaysRemaining;
+      avgNeededForLower = (currentBand.lower * minDays - (partialAvg * minDays - (avgDays[0].value - partialAvg) * (minDays - 1))) / calendarDaysRemaining;
+      // Simplificar: los próximos días necesitan promediar aproximadamente el umbral para mantener el promedio
+      avgNeededForUpper = currentBand.upper;
+      avgNeededForLower = currentBand.lower;
     }
 
     // ¿Ya se cruzó?
