@@ -15,7 +15,8 @@ const App = (() => {
     dailyStates:     [],    // Output del rules engine (daily)
     weeklyStates:    [],    // Output del rules engine (weekly)
     bandChanges:     [],    // Historial de cambios de banda
-    currentBand:     null,  // Banda actual
+    currentBand:     null,  // Banda actual (según historia)
+    operativeBand:   null,  // Banda operativa (basada en operativeCenter)
     currentState:    null,  // Estado del día más reciente (daily)
     currentWeek:     null,  // Estado de la semana actual (parcial)
     usdTracker:      null,  // Tracker de pérdida acumulada en USD
@@ -85,6 +86,7 @@ const App = (() => {
 
       // 2b. Recalcular la semana actual con el centro operativo (no histórico)
       const operativeBand = RulesEngine.calcBand(state.config.operativeCenter, state.config.marginPct);
+      state.operativeBand = operativeBand;  // Guardar para uso en rendering
       state.currentWeek = RulesEngine.getCurrentWeekState(data, operativeBand, state.config);
       state.usdTracker = RulesEngine.computeUsdTracker(state.bandChanges, state.config.pmFactor);
 
@@ -286,7 +288,7 @@ const App = (() => {
     const el = document.getElementById('current-week-panel');
     if (!el) return;
     const cw = state.currentWeek;
-    const b  = state.currentBand;
+    const b  = state.operativeBand;  // Usar banda operativa (con operativeCenter), no histórica
     if (!cw || !b) { el.innerHTML = '<p class="muted">Sin datos de semana actual.</p>'; return; }
 
     const avgStatus = cw.avgAboveUpper
