@@ -297,6 +297,40 @@ const App = (() => {
       let thresholdContent = '';
 
       if (cw.daysRemaining > 0) {
+        // Contar días fuera de banda
+        const daysAboveUpper = cw.days.filter(d => d.value > b.upper).length;
+        const daysBelowLower = cw.days.filter(d => d.value < b.lower).length;
+        const daysOutOfBand = daysAboveUpper + daysBelowLower;
+
+        let warningMsg = '';
+        if (daysOutOfBand > 0) {
+          if (daysAboveUpper > daysBelowLower) {
+            // Más días sobre techo → riesgo de cambio hacia arriba
+            const needUpper = cw.avgNeededForUpper !== null
+              ? Utils.formatNumber(cw.avgNeededForUpper)
+              : '—';
+            warningMsg = `
+              <div class="threshold-alert" style="border-left-color: var(--negative);">
+                <strong>⚠️ Van ${daysAboveUpper} día(s) por ENCIMA del techo.</strong><br>
+                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR DEBAJO de ${needUpper}</strong>
+                para evitar el cambio de centro de banda hacia <span style="color: var(--negative);">ARRIBA</span>.
+              </div>
+            `;
+          } else if (daysBelowLower > daysAboveUpper) {
+            // Más días bajo piso → riesgo de cambio hacia abajo
+            const needLower = cw.avgNeededForLower !== null
+              ? Utils.formatNumber(cw.avgNeededForLower)
+              : '—';
+            warningMsg = `
+              <div class="threshold-alert" style="border-left-color: var(--info);">
+                <strong>⚠️ Van ${daysBelowLower} día(s) por DEBAJO del piso.</strong><br>
+                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR ENCIMA de ${needLower}</strong>
+                para evitar el cambio de centro de banda hacia <span style="color: var(--info);">ABAJO</span>.
+              </div>
+            `;
+          }
+        }
+
         const gapToUpper = cw.avgNeededForUpper !== null
           ? Utils.formatNumber(cw.avgNeededForUpper)
           : '—';
@@ -304,31 +338,31 @@ const App = (() => {
           ? Utils.formatNumber(cw.avgNeededForLower)
           : '—';
 
-        thresholdContent = `
+        thresholdContent = warningMsg + `
           <div class="threshold-row">
-            <span class="threshold-label">Promedio necesario para superar TECHO:</span>
+            <span class="threshold-label">Para cruzar TECHO (cambio ALCISTA):</span>
             <span class="threshold-value">${gapToUpper}</span>
           </div>
           <div class="threshold-row">
-            <span class="threshold-label">Promedio necesario para superar PISO:</span>
+            <span class="threshold-label">Para cruzar PISO (cambio BAJISTA):</span>
             <span class="threshold-value">${gapToLower}</span>
           </div>
-          <div class="threshold-note">Con ${cw.daysRemaining} día(s) restante(s) en la semana</div>
+          <div class="threshold-note">Promedio actual: ${Utils.formatNumber(cw.partialAverage)} | Días restantes: ${cw.daysRemaining}</div>
         `;
       } else {
         // Semana completa: mostrar análisis de qué pasó
         const finalStatus = cw.avgAboveUpper
-          ? '<span style="color: var(--negative)">Semana ACTIVA (promedio supera techo)</span>'
+          ? '<span style="color: var(--negative)">✓ Cambio ALCISTA disparado — promedio supera techo</span>'
           : cw.avgBelowLower
-            ? '<span style="color: var(--info)">Semana ACTIVA (promedio supera piso)</span>'
-            : '<span style="color: var(--positive)">Semana neutral (dentro de banda)</span>';
+            ? '<span style="color: var(--info)">✓ Cambio BAJISTA disparado — promedio supera piso</span>'
+            : '<span style="color: var(--positive)">Semana neutral — sin cambio</span>';
 
         thresholdContent = `
           <div class="threshold-row">
-            <span class="threshold-label">Estado semanal:</span>
+            <span class="threshold-label">Resultado final:</span>
             <span class="threshold-value">${finalStatus}</span>
           </div>
-          <div class="threshold-note">Semana completada: ${cw.daysObserved} observaciones + ${cw.daysFilled} completadas</div>
+          <div class="threshold-note">Promedio semanal: ${Utils.formatNumber(cw.partialAverage)} | Umbral superior: ${Utils.formatNumber(b.upper)} | Umbral inferior: ${Utils.formatNumber(b.lower)}</div>
         `;
       }
 
