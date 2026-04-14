@@ -51,6 +51,76 @@ const ProbabilityEngine = (() => {
 
     const bandWidth = s.upper - s.lower;
 
+    // Frecuencia de días fuera de banda en últimos 5 días
+    // (capturas no solo rachas, sino patrones intermitentes)
+    const freqOutOfBand = (k) => {
+      if (n <= k) return 0;
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      const countOut = window.filter(d => d.isAboveUpper || d.isBelowLower).length;
+      return countOut / window.length;
+    };
+
+    const freqAboveUpper = (k) => {
+      if (n <= k) return 0;
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      const count = window.filter(d => d.isAboveUpper).length;
+      return count / window.length;
+    };
+
+    const freqBelowLower = (k) => {
+      if (n <= k) return 0;
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      const count = window.filter(d => d.isBelowLower).length;
+      return count / window.length;
+    };
+
+    // Puntuación de proximidad con decaimiento exponencial
+    // Valores cercanos al límite tienen mayor peso
+    const proximityScore = (k) => {
+      if (n <= k) return 0;
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      let score = 0;
+      window.forEach((d, idx) => {
+        const daysAgo = window.length - idx;
+        const recencyFactor = Math.exp(-daysAgo / 3); // Recencia: días recientes pesan más
+        if (d.isAboveUpper) {
+          // Qué tan lejos del techo? Si gapToUpper es negativo, ya lo superó
+          const distFromThreshold = Math.max(0, d.gapToUpper) / 100;
+          score += (1 - distFromThreshold) * recencyFactor; // Cercano = 1, lejano = 0
+        }
+        if (d.isBelowLower) {
+          const distFromThreshold = Math.max(0, d.gapToLower) / 100;
+          score += (1 - distFromThreshold) * recencyFactor;
+        }
+      });
+      return Math.min(score / window.length, 1); // Normalizar 0-1
+    };
+
+    // Volatilidad de las brechas: cambios agresivos en distancia a límites
+    const gapVolatility = (k) => {
+      if (n <= k + 1) return 0;
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      const gaps = window.map(d => {
+        const upGap = d.isAboveUpper ? Math.abs(d.gapToUpper) : 0;
+        const downGap = d.isBelowLower ? Math.abs(d.gapToLower) : 0;
+        return upGap + downGap;
+      });
+      if (gaps.length < 2) return 0;
+      return Utils.stdDev(gaps) / (Math.max(...gaps) || 0.01);
+    };
+
+    // Días desde último evento fuera de banda (recencia)
+    const daysSinceOutOfBand = (k) => {
+      if (n <= k) return k; // Si no hay datos, devuelve k (máximo)
+      const window = dailyStates.slice(Math.max(0, n - k), n);
+      for (let j = window.length - 1; j >= 0; j--) {
+        if (window[j].isAboveUpper || window[j].isBelowLower) {
+          return (window.length - 1 - j); // 0 si hoy, 1 si ayer, etc.
+        }
+      }
+      return k; // No hubo evento
+    };
+
     return [
       s.gapToUpper / 100,                        // 0: distancia al techo (pct)
       s.gapToLower / 100,                        // 1: distancia al piso (pct)
@@ -71,6 +141,12 @@ const ProbabilityEngine = (() => {
       bandWidth > 0 ? bandWidth / s.center : 0,  // 16: amplitud relativa
       s.isAboveUpper ? 1 : 0,                    // 17: binario sobre techo
       s.isBelowLower ? 1 : 0,                    // 18: binario bajo piso
+      freqOutOfBand(5),                          // 19: % días fuera de banda (5d)
+      freqAboveUpper(5),                         // 20: % días sobre techo (5d)
+      freqBelowLower(5),                         // 21: % días bajo piso (5d)
+      proximityScore(5),                         // 22: puntuación de proximidad (5d)
+      gapVolatility(5),                          // 23: volatilidad de brechas (5d)
+      daysSinceOutOfBand(5) / 5,                 // 24: días desde último evento (5d, normalizado)
     ];
   }
 
@@ -80,7 +156,9 @@ const ProbabilityEngine = (() => {
     'Retorno 3d', 'Retorno 5d', 'Retorno 10d',
     'Volatilidad 5d', 'Volatilidad 10d', 'Volatilidad 20d',
     'Pendiente 5d', 'Pendiente 10d',
-    'Amplitud de banda', 'Sobre techo (bin)', 'Bajo piso (bin)'
+    'Amplitud de banda', 'Sobre techo (bin)', 'Bajo piso (bin)',
+    'Frec. fuera de banda (5d)', 'Frec. sobre techo (5d)', 'Frec. bajo piso (5d)',
+    'Proximidad (5d)', 'Vol. brechas (5d)', 'Días desde evento (5d)'
   ];
 
   // ── Preparar datos de entrenamiento ──────────────────────────────────────
@@ -296,31 +374,63 @@ const ProbabilityEngine = (() => {
     // features[4] = streakAboveUpper/5, features[5] = streakBelowLower/5
     // features[0] = gapToUpper, features[1] = gapToLower
     // features[17] = aboveUpper binary, features[18] = belowLower binary
+    // features[19] = freqOutOfBand(5d), features[20] = freqAboveUpper(5d), features[21] = freqBelowLower(5d)
+    // features[22] = proximityScore, features[23] = gapVolatility, features[24] = daysSinceOutOfBand
 
     const streakU  = features[4] * 5;  // días sobre techo
     const streakL  = features[5] * 5;  // días bajo piso
     const gapU     = features[0];      // gap al techo en fracción
     const gapL     = features[1];      // gap al piso en fracción
     const posInBand = features[3];     // 0=piso, 1=techo
+    const freqOut  = features[19] || 0; // frecuencia días fuera de banda
+    const freqAboveU = features[20] || 0;
+    const freqBelowL = features[21] || 0;
+    const proximityScore = features[22] || 0;
+    const gapVolatility = features[23] || 0;
+    const daysSinceEvent = features[24] || 0; // normalizado 0-1
 
     let baseScore = 0;
 
-    // Racha sobre techo
+    // Frecuencia de días fuera de banda (nuevo: MAYOR SENSIBILIDAD)
+    // 40% de días fuera = 0.40 → ahora suma 0.30 a la probabilidad
+    if (freqOut >= 0.40) baseScore += 0.35;
+    else if (freqOut >= 0.30) baseScore += 0.25;
+    else if (freqOut >= 0.20) baseScore += 0.15;
+
+    // Racha sobre techo (con sensibilidad mejorada)
     if (streakU >= 4)      baseScore += 0.70;
-    else if (streakU >= 3) baseScore += 0.45;
-    else if (streakU >= 2) baseScore += 0.25;
-    else if (streakU >= 1) baseScore += 0.12;
+    else if (streakU >= 3) baseScore += 0.50;
+    else if (streakU >= 2) baseScore += 0.30;
+    else if (streakU >= 1) baseScore += 0.15;
 
-    // Racha bajo piso
+    // Racha bajo piso (con sensibilidad mejorada)
     if (streakL >= 4)      baseScore += 0.70;
-    else if (streakL >= 3) baseScore += 0.45;
-    else if (streakL >= 2) baseScore += 0.25;
-    else if (streakL >= 1) baseScore += 0.12;
+    else if (streakL >= 3) baseScore += 0.50;
+    else if (streakL >= 2) baseScore += 0.30;
+    else if (streakL >= 1) baseScore += 0.15;
 
-    // Proximidad al techo
+    // Proximidad con decaimiento exponencial (nuevo: directamente usa score calculado)
+    // proximityScore mide qué tan cercanos están los eventos recientes a los límites
+    baseScore += proximityScore * 0.25;
+
+    // Volatilidad de brechas: cambios agresivos en distancia a límites (nuevo)
+    if (gapVolatility > 0.5) baseScore += 0.15;
+    else if (gapVolatility > 0.3) baseScore += 0.08;
+
+    // Recencia: eventos recientes son más predictivos (nuevo)
+    // daysSinceEvent: 0 = hoy, 1 = ayer, normalizado a 0-1 en 5d window
+    const recencyBonus = (1 - daysSinceEvent * 0.2) * freqOut * 0.15; // Máx +0.15 si evento hoy
+    baseScore += recencyBonus;
+
+    // Proximidad al techo (original)
     if (gapU < 0)         baseScore += 0.20;   // ya superó el techo
     else if (gapU < 0.01) baseScore += 0.15;   // a <1%
     else if (gapU < 0.02) baseScore += 0.08;
+
+    // Proximidad al piso (original, ahora también mejorado)
+    if (gapL < 0)         baseScore += 0.20;   // ya superó el piso
+    else if (gapL < 0.01) baseScore += 0.15;   // a <1%
+    else if (gapL < 0.02) baseScore += 0.08;
 
     // Posición en banda
     if (posInBand > 0.85) baseScore += 0.10;

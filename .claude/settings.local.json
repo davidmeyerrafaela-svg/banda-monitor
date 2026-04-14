@@ -17,7 +17,9 @@
       "Bash(python fetch_news.py)",
       "Bash(python3)",
       "Bash(python -m http.server 8000)",
-      "Bash(python3 -c ':*)"
+      "Bash(python3 -c ':*)",
+      "Bash(node buildHTML.js)",
+      "Bash(grep -n \"^const ProbabilityEngine\\\\|^}\\)\\(\\);$\" \"C:\\\\Users\\\\HP\\\\OneDrive\\\\Desktop\\\\Banda variable\\\\banda_monitor.html\")"
     ]
   }
 }
