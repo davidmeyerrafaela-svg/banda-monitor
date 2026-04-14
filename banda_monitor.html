@@ -2072,6 +2072,9 @@ const RulesEngine = (() => {
     const daysObserved = thisWeekDays.length;
     const daysFilled   = avgDays.length - daysObserved;   // Días llenados de semana anterior
     const daysRemaining = Math.max(0, minDays - avgDays.length); // Negocio-días que aún faltan
+    // Días que faltan EN LA SEMANA DE CALENDARIO (lunes a viernes)
+    // Si el último dato es viernes o antes, faltan días. Si es después del viernes, la semana terminó.
+    const calendarDaysRemaining = Math.max(0, Utils.toDate(addDays(weekFriday, 1)).getTime() - Utils.toDate(addDays(lastDate, 1)).getTime()) / (1000 * 60 * 60 * 24);
 
     // Distancia del promedio parcial al umbral
     const distToUpper = partialAvg ? Utils.roundTo((currentBand.upper - partialAvg) / currentBand.center * 100, 4) : null;
@@ -2101,6 +2104,7 @@ const RulesEngine = (() => {
       daysObserved,
       daysFilled,
       daysRemaining,
+      calendarDaysRemaining: Math.round(calendarDaysRemaining),
       partialAverage: partialAvg ? Utils.roundTo(partialAvg, 4) : null,
       avgPctFromCenter: partialAvg ? Utils.roundTo((partialAvg - currentBand.center) / currentBand.center * 100, 4) : null,
       distToUpper,
@@ -4034,7 +4038,7 @@ const App = (() => {
     if (cw.partialAverage) {
       let thresholdContent = '';
 
-      if (cw.daysRemaining > 0) {
+      if (cw.calendarDaysRemaining > 0) {
         // Contar días fuera de banda
         const daysAboveUpper = cw.days.filter(d => d.value > b.upper).length;
         const daysBelowLower = cw.days.filter(d => d.value < b.lower).length;
@@ -4050,7 +4054,7 @@ const App = (() => {
             warningMsg = `
               <div class="threshold-alert" style="border-left-color: var(--negative);">
                 <strong>⚠️ Van ${daysAboveUpper} día(s) por ENCIMA del techo.</strong><br>
-                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR DEBAJO de ${needUpper}</strong>
+                Es necesario que el promedio de los próximos ${cw.calendarDaysRemaining} día(s) se encuentre <strong>POR DEBAJO de ${needUpper}</strong>
                 para evitar el cambio de centro de banda hacia <span style="color: var(--negative);">ARRIBA</span>.
               </div>
             `;
@@ -4062,7 +4066,7 @@ const App = (() => {
             warningMsg = `
               <div class="threshold-alert" style="border-left-color: var(--info);">
                 <strong>⚠️ Van ${daysBelowLower} día(s) por DEBAJO del piso.</strong><br>
-                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR ENCIMA de ${needLower}</strong>
+                Es necesario que el promedio de los próximos ${cw.calendarDaysRemaining} día(s) se encuentre <strong>POR ENCIMA de ${needLower}</strong>
                 para evitar el cambio de centro de banda hacia <span style="color: var(--info);">ABAJO</span>.
               </div>
             `;

@@ -296,7 +296,7 @@ const App = (() => {
     if (cw.partialAverage) {
       let thresholdContent = '';
 
-      if (cw.daysRemaining > 0) {
+      if (cw.calendarDaysRemaining > 0) {
         // Contar días fuera de banda
         const daysAboveUpper = cw.days.filter(d => d.value > b.upper).length;
         const daysBelowLower = cw.days.filter(d => d.value < b.lower).length;
@@ -312,7 +312,7 @@ const App = (() => {
             warningMsg = `
               <div class="threshold-alert" style="border-left-color: var(--negative);">
                 <strong>⚠️ Van ${daysAboveUpper} día(s) por ENCIMA del techo.</strong><br>
-                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR DEBAJO de ${needUpper}</strong>
+                Es necesario que el promedio de los próximos ${cw.calendarDaysRemaining} día(s) se encuentre <strong>POR DEBAJO de ${needUpper}</strong>
                 para evitar el cambio de centro de banda hacia <span style="color: var(--negative);">ARRIBA</span>.
               </div>
             `;
@@ -324,7 +324,7 @@ const App = (() => {
             warningMsg = `
               <div class="threshold-alert" style="border-left-color: var(--info);">
                 <strong>⚠️ Van ${daysBelowLower} día(s) por DEBAJO del piso.</strong><br>
-                Es necesario que el promedio de los próximos ${cw.daysRemaining} día(s) se encuentre <strong>POR ENCIMA de ${needLower}</strong>
+                Es necesario que el promedio de los próximos ${cw.calendarDaysRemaining} día(s) se encuentre <strong>POR ENCIMA de ${needLower}</strong>
                 para evitar el cambio de centro de banda hacia <span style="color: var(--info);">ABAJO</span>.
               </div>
             `;

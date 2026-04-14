@@ -369,7 +369,10 @@ const RulesEngine = (() => {
     const partialAvg = avgDays.length > 0 ? Utils.mean(avgDays.map(d => d.value)) : null;
     const daysObserved = thisWeekDays.length;
     const daysFilled   = avgDays.length - daysObserved;   // Días llenados de semana anterior
-    const daysRemaining = Math.max(0, minDays - avgDays.length); // Negocio-días que aún faltan
+    // Días que faltan EN LA SEMANA DE CALENDARIO (lunes a viernes)
+    // Si el último dato es viernes o antes, faltan días. Si es después del viernes, la semana terminó.
+    const calendarDaysRemaining = Math.max(0, Utils.toDate(addDays(weekFriday, 1)).getTime() - Utils.toDate(addDays(lastDate, 1)).getTime()) / (1000 * 60 * 60 * 24);
+    const daysRemaining = Math.max(0, minDays - avgDays.length); // Días que faltan para tener 5 datos para el promedio
 
     // Distancia del promedio parcial al umbral
     const distToUpper = partialAvg ? Utils.roundTo((currentBand.upper - partialAvg) / currentBand.center * 100, 4) : null;
@@ -399,6 +402,7 @@ const RulesEngine = (() => {
       daysObserved,
       daysFilled,
       daysRemaining,
+      calendarDaysRemaining: Math.round(calendarDaysRemaining),
       partialAverage: partialAvg ? Utils.roundTo(partialAvg, 4) : null,
       avgPctFromCenter: partialAvg ? Utils.roundTo((partialAvg - currentBand.center) / currentBand.center * 100, 4) : null,
       distToUpper,
