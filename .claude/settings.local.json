@@ -15,7 +15,9 @@
       "Bash(python build_standalone_v2.py)",
       "Bash(python build_standalone_iphone.py)",
       "Bash(python fetch_news.py)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(python -m http.server 8000)",
+      "Bash(python3 -c ':*)"
     ]
   }
 }

@@ -261,10 +261,10 @@ const RulesEngine = (() => {
     for (let i = 0; i < data.length; i++) {
       const { date, value } = data[i];
 
-      // Aplicar cambio de banda si hoy es la fecha efectiva
-      if (effectiveMap.has(date)) {
-        activeBand = effectiveMap.get(date);
-      }
+      // NOT actualizar activeBand basado en cambios de banda históricos
+      // Todos los días se evalúan contra operativeCenter de forma consistente
+      // (Los cambios de banda se muestran en la sección de histórico, pero no afectan
+      // la evaluación diaria contra el centro operativo actual)
 
       const ws = getWeekStart(date);
       const week = weekMap.get(ws);
