@@ -291,6 +291,50 @@ const App = (() => {
     const b  = state.operativeBand;  // Usar banda operativa (con operativeCenter), no histórica
     if (!cw || !b) { el.innerHTML = '<p class="muted">Sin datos de semana actual.</p>'; return; }
 
+    // Calcular qué promedio falta para cruzar los umbrales
+    let thresholdHtml = '';
+    if (cw.partialAverage) {
+      let thresholdContent = '';
+
+      if (cw.daysRemaining > 0) {
+        const gapToUpper = cw.avgNeededForUpper !== null
+          ? Utils.formatNumber(cw.avgNeededForUpper)
+          : '—';
+        const gapToLower = cw.avgNeededForLower !== null
+          ? Utils.formatNumber(cw.avgNeededForLower)
+          : '—';
+
+        thresholdContent = `
+          <div class="threshold-row">
+            <span class="threshold-label">Promedio necesario para superar TECHO:</span>
+            <span class="threshold-value">${gapToUpper}</span>
+          </div>
+          <div class="threshold-row">
+            <span class="threshold-label">Promedio necesario para superar PISO:</span>
+            <span class="threshold-value">${gapToLower}</span>
+          </div>
+          <div class="threshold-note">Con ${cw.daysRemaining} día(s) restante(s) en la semana</div>
+        `;
+      } else {
+        // Semana completa: mostrar análisis de qué pasó
+        const finalStatus = cw.avgAboveUpper
+          ? '<span style="color: var(--negative)">Semana ACTIVA (promedio supera techo)</span>'
+          : cw.avgBelowLower
+            ? '<span style="color: var(--info)">Semana ACTIVA (promedio supera piso)</span>'
+            : '<span style="color: var(--positive)">Semana neutral (dentro de banda)</span>';
+
+        thresholdContent = `
+          <div class="threshold-row">
+            <span class="threshold-label">Estado semanal:</span>
+            <span class="threshold-value">${finalStatus}</span>
+          </div>
+          <div class="threshold-note">Semana completada: ${cw.daysObserved} observaciones + ${cw.daysFilled} completadas</div>
+        `;
+      }
+
+      thresholdHtml = `<div class="week-threshold-info">${thresholdContent}</div>`;
+    }
+
     const avgStatus = cw.avgAboveUpper
       ? '<span class="week-tag week-tag-red">SUPERA TECHO — ACTIVA</span>'
       : cw.avgBelowLower
@@ -347,7 +391,8 @@ const App = (() => {
           ${needsUpperHtml}
           ${effHtml}
         </div>
-      </div>`;
+      </div>
+      ${thresholdHtml}`;
   }
 
   // ── Panel tracker USD ─────────────────────────────────────────────────────

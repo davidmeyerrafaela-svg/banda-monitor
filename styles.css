@@ -646,6 +646,32 @@ body.dark .week-tag-blue  { background: rgba(2,132,199,.15);  }
 .week-metric-value { font-size: .95rem; font-weight: 700; white-space: nowrap; }
 .week-metric-value.info { color: var(--info); }
 
+.week-threshold-info {
+  margin-top: 12px;
+  background:    var(--surface2);
+  border-left:   3px solid var(--accent);
+  border-radius: var(--radius);
+  padding:       12px;
+  font-size:     .85rem;
+}
+.threshold-row {
+  display:       flex;
+  justify-content: space-between;
+  align-items:   center;
+  gap:           8px;
+  padding:       6px 0;
+}
+.threshold-label { color: var(--text-muted); }
+.threshold-value { font-weight: 700; font-size: .95rem; color: var(--accent); }
+.threshold-note {
+  margin-top:    8px;
+  padding-top:   8px;
+  border-top:    1px solid var(--border);
+  color:         var(--text-muted);
+  font-size:     .8rem;
+  font-style:    italic;
+}
+
 /* ── USD Tracker panel ────────────────────────────────────────── */
 .usd-tracker-grid {
   display:               grid;
