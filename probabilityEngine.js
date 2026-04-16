@@ -348,11 +348,45 @@ const ProbabilityEngine = (() => {
     );
     const probFinal = Utils.clamp(probBase + newsAdjust, 0.01, 0.99);
 
-    // 5. Probabilidades direccionales (alcista vs bajista)
-    const streakU = currentFeatures[4] * 5;  // días sobre techo → presión alcista
-    const streakL = currentFeatures[5] * 5;  // días bajo piso → presión bajista
-    const probAlcista = Utils.clamp(probFinal * (streakU / (streakU + streakL + 0.1)), 0.01, 0.99);
-    const probBajista = Utils.clamp(probFinal * (streakL / (streakU + streakL + 0.1)), 0.01, 0.99);
+    // 5. Probabilidades direccionales ASIMÉTRICAS (alcista vs bajista)
+    // Usar el mismo algoritmo frequency-based que en heuristicProbability
+    const streakU  = currentFeatures[4] * 5;  // días sobre techo
+    const streakL  = currentFeatures[5] * 5;  // días bajo piso
+    const freqAboveU = currentFeatures[20] || 0;  // frecuencia de días SOBRE TECHO
+    const freqBelowL = currentFeatures[21] || 0;  // frecuencia de días BAJO PISO
+
+    // PROBABILIDAD ALCISTA: basada en frecuencia de días SOBRE TECHO
+    let probAlcista = 0.01;  // Mínimo base
+    if (freqAboveU >= 0.80) probAlcista = 0.70;      // 4/5 o más días sobre techo = muy probable
+    else if (freqAboveU >= 0.60) probAlcista = 0.50;  // 3/5 días sobre techo = probable
+    else if (freqAboveU >= 0.40) probAlcista = 0.30;  // 2/5 días sobre techo = posible
+    else if (freqAboveU >= 0.20) probAlcista = 0.15;  // 1/5 días sobre techo = débil
+    else if (streakU >= 4) probAlcista = 0.40;        // Racha de 4+ días sobre techo = riesgo significativo
+    else if (streakU >= 3) probAlcista = 0.25;        // Racha de 3 días = riesgo moderado
+    else if (streakU >= 2) probAlcista = 0.12;        // Racha de 2 días = riesgo bajo
+    else probAlcista = 0.01;                           // Sin señal alcista = casi imposible
+
+    // PROBABILIDAD BAJISTA: basada en frecuencia de días BAJO PISO
+    let probBajista = 0.01;  // Mínimo base
+    if (freqBelowL >= 0.80) probBajista = 0.75;      // 4/5 o más días bajo piso = muy probable
+    else if (freqBelowL >= 0.60) probBajista = 0.55;  // 3/5 días bajo piso = probable
+    else if (freqBelowL >= 0.40) probBajista = 0.35;  // 2/5 días bajo piso = posible
+    else if (freqBelowL >= 0.20) probBajista = 0.20;  // 1/5 días bajo piso = débil
+    else if (streakL >= 4) probBajista = 0.65;        // Racha de 4+ días bajo piso = alto riesgo
+    else if (streakL >= 3) probBajista = 0.45;        // Racha de 3 días = riesgo moderado
+    else if (streakL >= 2) probBajista = 0.25;        // Racha de 2 días = riesgo bajo
+    else probBajista = 0.02;                           // Sin señal bajista = muy débil
+
+    // Normalizar para que la suma de probabilidades sea razonable
+    const totalProb = probAlcista + probBajista;
+    if (totalProb > 1.0) {
+      const factor = 0.99 / totalProb;
+      probAlcista *= factor;
+      probBajista *= factor;
+    }
+
+    probAlcista = Utils.clamp(probAlcista, 0.01, 0.99);
+    probBajista = Utils.clamp(probBajista, 0.01, 0.99);
 
     return {
       probModel:      Utils.roundTo(probModel, 4),
