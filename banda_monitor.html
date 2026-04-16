@@ -2635,19 +2635,46 @@ const ProbabilityEngine = (() => {
     // Aplicar probabilidad mínima garantizada
     const probFinalAdjusted = Math.max(probFinal, minProbThreshold);
 
-    // Dividir entre alcista y bajista según rachas
-    const totalStreak = streakU + streakL + 0.1;
-    let probAlcista = Utils.clamp(probFinalAdjusted * (streakU / totalStreak), 0.01, 0.99);
-    let probBajista = Utils.clamp(probFinalAdjusted * (streakL / totalStreak), 0.01, 0.99);
+    // Dividir entre alcista y bajista SOLO si hay presión mixta
+    let probAlcista, probBajista;
 
-    // Si solo hay racha en una dirección, concentrar toda la probabilidad ahí
-    if (streakU >= 2 && streakL === 0) {
+    if (streakU > 0 && streakL === 0) {
+      // Solo presión alcista → concentrar toda la probabilidad ahí
       probAlcista = probFinalAdjusted;
       probBajista = 0.01;
-    } else if (streakL >= 2 && streakU === 0) {
+    } else if (streakL > 0 && streakU === 0) {
+      // Solo presión bajista → concentrar toda la probabilidad ahí
       probBajista = probFinalAdjusted;
       probAlcista = 0.01;
+    } else if (streakU > 0 && streakL > 0) {
+      // Presión mixta → dividir proporcionalmente pero respetando el mínimo en cada dirección
+      const totalStreak = streakU + streakL;
+      const weightU = streakU / totalStreak;
+      const weightL = streakL / totalStreak;
+
+      // Calcular mínimos individuales por dirección
+      let minAlcista = 0.01;
+      let minBajista = 0.01;
+      if (streakU >= 4) minAlcista = Math.max(minAlcista, 0.35);
+      else if (streakU >= 3) minAlcista = Math.max(minAlcista, 0.20);
+      else if (streakU >= 2) minAlcista = Math.max(minAlcista, 0.10);
+      else if (streakU >= 1) minAlcista = Math.max(minAlcista, 0.05);
+
+      if (streakL >= 4) minBajista = Math.max(minBajista, 0.35);
+      else if (streakL >= 3) minBajista = Math.max(minBajista, 0.20);
+      else if (streakL >= 2) minBajista = Math.max(minBajista, 0.10);
+      else if (streakL >= 1) minBajista = Math.max(minBajista, 0.05);
+
+      probAlcista = Math.max(probFinalAdjusted * weightU, minAlcista);
+      probBajista = Math.max(probFinalAdjusted * weightL, minBajista);
+    } else {
+      // Sin presión clara
+      probAlcista = Utils.clamp(probFinalAdjusted * 0.5, 0.01, 0.99);
+      probBajista = Utils.clamp(probFinalAdjusted * 0.5, 0.01, 0.99);
     }
+
+    probAlcista = Utils.clamp(probAlcista, 0.01, 0.99);
+    probBajista = Utils.clamp(probBajista, 0.01, 0.99);
 
     return {
       probModel:      Utils.roundTo(probModel, 4),
@@ -2732,16 +2759,77 @@ const ProbabilityEngine = (() => {
     if (posInBand > 0.85) baseScore += 0.10;
     if (posInBand < 0.15) baseScore += 0.10;
 
+    // Aplicar mínimo garantizado basado en indicadores técnicos fuertes
+    let minProbThreshold = 0.01;
+    if (streakU >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días sobre techo = alto riesgo alcista
+    if (streakL >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días bajo piso = alto riesgo bajista
+    if (streakU >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);  // 3 días = riesgo moderado-alto
+    if (streakL >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);
+    if (streakU >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);  // 2 días = riesgo moderado
+    if (streakL >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);
+    if (freqOut >= 0.60) minProbThreshold = Math.max(minProbThreshold, 0.40); // 60%+ días fuera = riesgo alto
+    if (freqOut >= 0.40) minProbThreshold = Math.max(minProbThreshold, 0.25); // 40%+ días fuera = riesgo significativo
+
     const probBase  = Utils.clamp(baseScore, 0.02, 0.95);
     const newsAdjust = Utils.clamp(
       (newsPressure / 100) * newsMaxAdjust,
       -newsMaxAdjust, newsMaxAdjust
     );
-    const probFinal = Utils.clamp(probBase + newsAdjust, 0.01, 0.99);
+    let probFinal = Utils.clamp(probBase + newsAdjust, 0.01, 0.99);
 
-    // Probabilidades direccionales (alcista vs bajista)
-    const probAlcista = Utils.clamp(probFinal * (streakU / (streakU + streakL + 0.1)), 0.01, 0.99);
-    const probBajista = Utils.clamp(probFinal * (streakL / (streakU + streakL + 0.1)), 0.01, 0.99);
+    // Aplicar probabilidad mínima garantizada
+    probFinal = Math.max(probFinal, minProbThreshold);
+
+    // Probabilidades direccionales (alcista vs bajista) — Usar lógica de concentración como en computeProbability
+    let probAlcista, probBajista;
+
+    if (streakU > 0 && streakL === 0) {
+      // Solo presión alcista → concentrar toda la probabilidad ahí
+      probAlcista = probFinal;
+      probBajista = 0.01;
+    } else if (streakL > 0 && streakU === 0) {
+      // Solo presión bajista → concentrar toda la probabilidad ahí
+      probBajista = probFinal;
+      probAlcista = 0.01;
+    } else if (streakU > 0 && streakL > 0) {
+      // Presión mixta → dividir pero favorecer la dirección más fuerte
+      // Si hay diferencia significativa en streaks, concentrar más en la dirección fuerte
+      const totalStreak = streakU + streakL;
+      let weightU = streakU / totalStreak;
+      let weightL = streakL / totalStreak;
+
+      // Si un streak es al menos 2x el otro, enfatizar más la dirección fuerte
+      if (streakU >= streakL * 2) {
+        weightU = Math.min(0.80, weightU + 0.25);
+        weightL = 1 - weightU;
+      } else if (streakL >= streakU * 2) {
+        weightL = Math.min(0.80, weightL + 0.25);
+        weightU = 1 - weightL;
+      }
+
+      // Calcular mínimos individuales más conservadores para presión mixta
+      let minAlcista = 0.02;
+      let minBajista = 0.02;
+      if (streakU >= 4) minAlcista = Math.max(minAlcista, 0.20); // Menos agresivo en presión mixta
+      else if (streakU >= 3) minAlcista = Math.max(minAlcista, 0.15);
+      else if (streakU >= 2) minAlcista = Math.max(minAlcista, 0.08);
+      else if (streakU >= 1) minAlcista = Math.max(minAlcista, 0.03);
+
+      if (streakL >= 4) minBajista = Math.max(minBajista, 0.20);
+      else if (streakL >= 3) minBajista = Math.max(minBajista, 0.15);
+      else if (streakL >= 2) minBajista = Math.max(minBajista, 0.08);
+      else if (streakL >= 1) minBajista = Math.max(minBajista, 0.03);
+
+      probAlcista = Math.max(probFinal * weightU, minAlcista);
+      probBajista = Math.max(probFinal * weightL, minBajista);
+    } else {
+      // Sin presión clara
+      probAlcista = Utils.clamp(probFinal * 0.5, 0.01, 0.99);
+      probBajista = Utils.clamp(probFinal * 0.5, 0.01, 0.99);
+    }
+
+    probAlcista = Utils.clamp(probAlcista, 0.01, 0.99);
+    probBajista = Utils.clamp(probBajista, 0.01, 0.99);
 
     return {
       probModel:       null,
