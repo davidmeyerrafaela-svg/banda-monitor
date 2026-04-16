@@ -2704,137 +2704,67 @@ const ProbabilityEngine = (() => {
     const streakL  = features[5] * 5;  // días bajo piso
     const gapU     = features[0];      // gap al techo en fracción
     const gapL     = features[1];      // gap al piso en fracción
-    const posInBand = features[3];     // 0=piso, 1=techo
-    const freqOut  = features[19] || 0; // frecuencia días fuera de banda
     const freqAboveU = features[20] || 0;
     const freqBelowL = features[21] || 0;
-    const proximityScore = features[22] || 0;
-    const gapVolatility = features[23] || 0;
-    const daysSinceEvent = features[24] || 0; // normalizado 0-1
 
-    let baseScore = 0;
+    // CÁLCULO DE PROBABILIDADES ASIMÉTRICAS por dirección
+    // Las probabilidades deben reflejar la distancia real a cada threshold
 
-    // Frecuencia de días fuera de banda (nuevo: MAYOR SENSIBILIDAD)
-    // 40% de días fuera = 0.40 → ahora suma 0.30 a la probabilidad
-    if (freqOut >= 0.40) baseScore += 0.35;
-    else if (freqOut >= 0.30) baseScore += 0.25;
-    else if (freqOut >= 0.20) baseScore += 0.15;
+    let probAlcista = 0.01;  // Mínimo base
+    let probBajista = 0.01;  // Mínimo base
 
-    // Racha sobre techo (con sensibilidad mejorada)
-    if (streakU >= 4)      baseScore += 0.70;
-    else if (streakU >= 3) baseScore += 0.50;
-    else if (streakU >= 2) baseScore += 0.30;
-    else if (streakU >= 1) baseScore += 0.15;
+    // PROBABILIDAD ALCISTA: basada en frecuencia de días SOBRE TECHO
+    // Para que suba: necesita muchos días consecutivos BIEN por encima del techo
+    if (freqAboveU >= 0.80) probAlcista = 0.70;      // 4/5 o más días sobre techo = muy probable
+    else if (freqAboveU >= 0.60) probAlcista = 0.50;  // 3/5 días sobre techo = probable
+    else if (freqAboveU >= 0.40) probAlcista = 0.30;  // 2/5 días sobre techo = posible
+    else if (freqAboveU >= 0.20) probAlcista = 0.15;  // 1/5 días sobre techo = débil
+    else if (streakU >= 4) probAlcista = 0.40;        // Racha de 4+ días sobre techo = riesgo significativo
+    else if (streakU >= 3) probAlcista = 0.25;        // Racha de 3 días = riesgo moderado
+    else if (streakU >= 2) probAlcista = 0.12;        // Racha de 2 días = riesgo bajo
+    else probAlcista = 0.01;                           // Sin señal alcista = casi imposible
 
-    // Racha bajo piso (con sensibilidad mejorada)
-    if (streakL >= 4)      baseScore += 0.70;
-    else if (streakL >= 3) baseScore += 0.50;
-    else if (streakL >= 2) baseScore += 0.30;
-    else if (streakL >= 1) baseScore += 0.15;
+    // PROBABILIDAD BAJISTA: basada en frecuencia de días BAJO PISO
+    // Para que baje: solo necesita mantener la mayoría de días por debajo del piso
+    if (freqBelowL >= 0.80) probBajista = 0.75;      // 4/5 o más días bajo piso = muy probable
+    else if (freqBelowL >= 0.60) probBajista = 0.55;  // 3/5 días bajo piso = probable
+    else if (freqBelowL >= 0.40) probBajista = 0.35;  // 2/5 días bajo piso = posible
+    else if (freqBelowL >= 0.20) probBajista = 0.20;  // 1/5 días bajo piso = débil
+    else if (streakL >= 4) probBajista = 0.65;        // Racha de 4+ días bajo piso = alto riesgo
+    else if (streakL >= 3) probBajista = 0.45;        // Racha de 3 días = riesgo moderado
+    else if (streakL >= 2) probBajista = 0.25;        // Racha de 2 días = riesgo bajo
+    else probBajista = 0.02;                           // Sin señal bajista = muy débil
 
-    // Proximidad con decaimiento exponencial (nuevo: directamente usa score calculado)
-    // proximityScore mide qué tan cercanos están los eventos recientes a los límites
-    baseScore += proximityScore * 0.25;
-
-    // Volatilidad de brechas: cambios agresivos en distancia a límites (nuevo)
-    if (gapVolatility > 0.5) baseScore += 0.15;
-    else if (gapVolatility > 0.3) baseScore += 0.08;
-
-    // Recencia: eventos recientes son más predictivos (nuevo)
-    // daysSinceEvent: 0 = hoy, 1 = ayer, normalizado a 0-1 en 5d window
-    const recencyBonus = (1 - daysSinceEvent * 0.2) * freqOut * 0.15; // Máx +0.15 si evento hoy
-    baseScore += recencyBonus;
-
-    // Proximidad al techo (original)
-    if (gapU < 0)         baseScore += 0.20;   // ya superó el techo
-    else if (gapU < 0.01) baseScore += 0.15;   // a <1%
-    else if (gapU < 0.02) baseScore += 0.08;
-
-    // Proximidad al piso (original, ahora también mejorado)
-    if (gapL < 0)         baseScore += 0.20;   // ya superó el piso
-    else if (gapL < 0.01) baseScore += 0.15;   // a <1%
-    else if (gapL < 0.02) baseScore += 0.08;
-
-    // Posición en banda
-    if (posInBand > 0.85) baseScore += 0.10;
-    if (posInBand < 0.15) baseScore += 0.10;
-
-    // Aplicar mínimo garantizado basado en indicadores técnicos fuertes
-    let minProbThreshold = 0.01;
-    if (streakU >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días sobre techo = alto riesgo alcista
-    if (streakL >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días bajo piso = alto riesgo bajista
-    if (streakU >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);  // 3 días = riesgo moderado-alto
-    if (streakL >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);
-    if (streakU >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);  // 2 días = riesgo moderado
-    if (streakL >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);
-    if (freqOut >= 0.60) minProbThreshold = Math.max(minProbThreshold, 0.40); // 60%+ días fuera = riesgo alto
-    if (freqOut >= 0.40) minProbThreshold = Math.max(minProbThreshold, 0.25); // 40%+ días fuera = riesgo significativo
-
-    const probBase  = Utils.clamp(baseScore, 0.02, 0.95);
+    // Ajustar por noticias (impacto limitado)
     const newsAdjust = Utils.clamp(
       (newsPressure / 100) * newsMaxAdjust,
-      -newsMaxAdjust, newsMaxAdjust
+      -newsMaxAdjust,
+      newsMaxAdjust
     );
-    let probFinal = Utils.clamp(probBase + newsAdjust, 0.01, 0.99);
 
-    // Aplicar probabilidad mínima garantizada
-    probFinal = Math.max(probFinal, minProbThreshold);
+    // Aplicar ajuste de noticias (con límites para no distorsionar completamente)
+    probAlcista = Utils.clamp(probAlcista + newsAdjust * 0.5, 0.01, 0.99);
+    probBajista = Utils.clamp(probBajista - newsAdjust * 0.5, 0.01, 0.99);
 
-    // Probabilidades direccionales (alcista vs bajista) — Usar lógica de concentración como en computeProbability
-    let probAlcista, probBajista;
-
-    if (streakU > 0 && streakL === 0) {
-      // Solo presión alcista → concentrar toda la probabilidad ahí
-      probAlcista = probFinal;
-      probBajista = 0.01;
-    } else if (streakL > 0 && streakU === 0) {
-      // Solo presión bajista → concentrar toda la probabilidad ahí
-      probBajista = probFinal;
-      probAlcista = 0.01;
-    } else if (streakU > 0 && streakL > 0) {
-      // Presión mixta → dividir pero favorecer la dirección más fuerte
-      // Si hay diferencia significativa en streaks, concentrar más en la dirección fuerte
-      const totalStreak = streakU + streakL;
-      let weightU = streakU / totalStreak;
-      let weightL = streakL / totalStreak;
-
-      // Si un streak es al menos 2x el otro, enfatizar más la dirección fuerte
-      if (streakU >= streakL * 2) {
-        weightU = Math.min(0.80, weightU + 0.25);
-        weightL = 1 - weightU;
-      } else if (streakL >= streakU * 2) {
-        weightL = Math.min(0.80, weightL + 0.25);
-        weightU = 1 - weightL;
-      }
-
-      // Calcular mínimos individuales más conservadores para presión mixta
-      let minAlcista = 0.02;
-      let minBajista = 0.02;
-      if (streakU >= 4) minAlcista = Math.max(minAlcista, 0.20); // Menos agresivo en presión mixta
-      else if (streakU >= 3) minAlcista = Math.max(minAlcista, 0.15);
-      else if (streakU >= 2) minAlcista = Math.max(minAlcista, 0.08);
-      else if (streakU >= 1) minAlcista = Math.max(minAlcista, 0.03);
-
-      if (streakL >= 4) minBajista = Math.max(minBajista, 0.20);
-      else if (streakL >= 3) minBajista = Math.max(minBajista, 0.15);
-      else if (streakL >= 2) minBajista = Math.max(minBajista, 0.08);
-      else if (streakL >= 1) minBajista = Math.max(minBajista, 0.03);
-
-      probAlcista = Math.max(probFinal * weightU, minAlcista);
-      probBajista = Math.max(probFinal * weightL, minBajista);
-    } else {
-      // Sin presión clara
-      probAlcista = Utils.clamp(probFinal * 0.5, 0.01, 0.99);
-      probBajista = Utils.clamp(probFinal * 0.5, 0.01, 0.99);
+    // Normalizar para que la suma de probabilidades sea razonable
+    // (no pueden ambas ser > 0.50 simultáneamente)
+    const totalProb = probAlcista + probBajista;
+    if (totalProb > 1.0) {
+      const factor = 0.99 / totalProb;
+      probAlcista *= factor;
+      probBajista *= factor;
     }
 
     probAlcista = Utils.clamp(probAlcista, 0.01, 0.99);
     probBajista = Utils.clamp(probBajista, 0.01, 0.99);
 
+    // Para compatibilidad con renderización, calcular un probFinal de combinación
+    const probFinal = Math.min(probAlcista + probBajista, 0.99);
+
     return {
       probModel:       null,
       probHistorical:  null,
-      probBase:        Utils.roundTo(probBase, 4),
+      probBase:        Utils.roundTo((probAlcista + probBajista) / 2, 4),  // Promedio de direccionales
       newsAdjust:      Utils.roundTo(newsAdjust, 4),
       probFinal:       Utils.roundTo(probFinal, 4),
       probAlcista:     Utils.roundTo(probAlcista, 4),
