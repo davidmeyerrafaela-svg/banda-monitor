@@ -2615,62 +2615,41 @@ const ProbabilityEngine = (() => {
     );
     const probFinal = Utils.clamp(probBase + newsAdjust, 0.01, 0.99);
 
-    // 5. Probabilidades direccionales (alcista vs bajista)
-    const streakU = currentFeatures[4] * 5;  // días sobre techo → presión alcista
-    const streakL = currentFeatures[5] * 5;  // días bajo piso → presión bajista
-    const freqOutOfBand = currentFeatures[19] || 0; // frecuencia días fuera de banda en 5d
+    // 5. Probabilidades direccionales ASIMÉTRICAS (alcista vs bajista)
+    // Usar el mismo algoritmo frequency-based que en heuristicProbability
+    const streakU  = currentFeatures[4] * 5;  // días sobre techo
+    const streakL  = currentFeatures[5] * 5;  // días bajo piso
+    const freqAboveU = currentFeatures[20] || 0;  // frecuencia de días SOBRE TECHO
+    const freqBelowL = currentFeatures[21] || 0;  // frecuencia de días BAJO PISO
 
-    // Probabilidad mínima garantizada basada en indicadores técnicos claros
-    // Si hay racha de 4+ días o frecuencia alta de días fuera de banda, la probabilidad debe ser >= 20-40%
-    let minProbThreshold = 0.01;
-    if (streakU >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días sobre techo = alto riesgo alcista
-    if (streakL >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días bajo piso = alto riesgo bajista
-    if (streakU >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);  // 3 días = riesgo moderado-alto
-    if (streakL >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);
-    if (streakU >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);  // 2 días = riesgo moderado
-    if (streakL >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);
-    if (freqOutOfBand >= 0.40) minProbThreshold = Math.max(minProbThreshold, 0.25); // 40%+ días fuera = riesgo significativo
-    if (freqOutOfBand >= 0.60) minProbThreshold = Math.max(minProbThreshold, 0.40); // 60%+ días fuera = riesgo alto
+    // PROBABILIDAD ALCISTA: basada en frecuencia de días SOBRE TECHO
+    let probAlcista = 0.01;  // Mínimo base
+    if (freqAboveU >= 0.80) probAlcista = 0.70;      // 4/5 o más días sobre techo = muy probable
+    else if (freqAboveU >= 0.60) probAlcista = 0.50;  // 3/5 días sobre techo = probable
+    else if (freqAboveU >= 0.40) probAlcista = 0.30;  // 2/5 días sobre techo = posible
+    else if (freqAboveU >= 0.20) probAlcista = 0.15;  // 1/5 días sobre techo = débil
+    else if (streakU >= 4) probAlcista = 0.40;        // Racha de 4+ días sobre techo = riesgo significativo
+    else if (streakU >= 3) probAlcista = 0.25;        // Racha de 3 días = riesgo moderado
+    else if (streakU >= 2) probAlcista = 0.12;        // Racha de 2 días = riesgo bajo
+    else probAlcista = 0.01;                           // Sin señal alcista = casi imposible
 
-    // Aplicar probabilidad mínima garantizada
-    const probFinalAdjusted = Math.max(probFinal, minProbThreshold);
+    // PROBABILIDAD BAJISTA: basada en frecuencia de días BAJO PISO
+    let probBajista = 0.01;  // Mínimo base
+    if (freqBelowL >= 0.80) probBajista = 0.75;      // 4/5 o más días bajo piso = muy probable
+    else if (freqBelowL >= 0.60) probBajista = 0.55;  // 3/5 días bajo piso = probable
+    else if (freqBelowL >= 0.40) probBajista = 0.35;  // 2/5 días bajo piso = posible
+    else if (freqBelowL >= 0.20) probBajista = 0.20;  // 1/5 días bajo piso = débil
+    else if (streakL >= 4) probBajista = 0.65;        // Racha de 4+ días bajo piso = alto riesgo
+    else if (streakL >= 3) probBajista = 0.45;        // Racha de 3 días = riesgo moderado
+    else if (streakL >= 2) probBajista = 0.25;        // Racha de 2 días = riesgo bajo
+    else probBajista = 0.02;                           // Sin señal bajista = muy débil
 
-    // Dividir entre alcista y bajista SOLO si hay presión mixta
-    let probAlcista, probBajista;
-
-    if (streakU > 0 && streakL === 0) {
-      // Solo presión alcista → concentrar toda la probabilidad ahí
-      probAlcista = probFinalAdjusted;
-      probBajista = 0.01;
-    } else if (streakL > 0 && streakU === 0) {
-      // Solo presión bajista → concentrar toda la probabilidad ahí
-      probBajista = probFinalAdjusted;
-      probAlcista = 0.01;
-    } else if (streakU > 0 && streakL > 0) {
-      // Presión mixta → dividir proporcionalmente pero respetando el mínimo en cada dirección
-      const totalStreak = streakU + streakL;
-      const weightU = streakU / totalStreak;
-      const weightL = streakL / totalStreak;
-
-      // Calcular mínimos individuales por dirección
-      let minAlcista = 0.01;
-      let minBajista = 0.01;
-      if (streakU >= 4) minAlcista = Math.max(minAlcista, 0.35);
-      else if (streakU >= 3) minAlcista = Math.max(minAlcista, 0.20);
-      else if (streakU >= 2) minAlcista = Math.max(minAlcista, 0.10);
-      else if (streakU >= 1) minAlcista = Math.max(minAlcista, 0.05);
-
-      if (streakL >= 4) minBajista = Math.max(minBajista, 0.35);
-      else if (streakL >= 3) minBajista = Math.max(minBajista, 0.20);
-      else if (streakL >= 2) minBajista = Math.max(minBajista, 0.10);
-      else if (streakL >= 1) minBajista = Math.max(minBajista, 0.05);
-
-      probAlcista = Math.max(probFinalAdjusted * weightU, minAlcista);
-      probBajista = Math.max(probFinalAdjusted * weightL, minBajista);
-    } else {
-      // Sin presión clara
-      probAlcista = Utils.clamp(probFinalAdjusted * 0.5, 0.01, 0.99);
-      probBajista = Utils.clamp(probFinalAdjusted * 0.5, 0.01, 0.99);
+    // Normalizar para que la suma de probabilidades sea razonable
+    const totalProb = probAlcista + probBajista;
+    if (totalProb > 1.0) {
+      const factor = 0.99 / totalProb;
+      probAlcista *= factor;
+      probBajista *= factor;
     }
 
     probAlcista = Utils.clamp(probAlcista, 0.01, 0.99);
@@ -2683,8 +2662,7 @@ const ProbabilityEngine = (() => {
       newsAdjust:     Utils.roundTo(newsAdjust, 4),
       probFinal:      Utils.roundTo(probFinal, 4),
       probAlcista:    Utils.roundTo(probAlcista, 4),
-      probBajista:    Utils.roundTo(probBajista, 4),
-      minProbThreshold: Utils.roundTo(minProbThreshold, 4)
+      probBajista:    Utils.roundTo(probBajista, 4)
     };
   }
 
