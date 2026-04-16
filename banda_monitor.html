@@ -2618,8 +2618,36 @@ const ProbabilityEngine = (() => {
     // 5. Probabilidades direccionales (alcista vs bajista)
     const streakU = currentFeatures[4] * 5;  // días sobre techo → presión alcista
     const streakL = currentFeatures[5] * 5;  // días bajo piso → presión bajista
-    const probAlcista = Utils.clamp(probFinal * (streakU / (streakU + streakL + 0.1)), 0.01, 0.99);
-    const probBajista = Utils.clamp(probFinal * (streakL / (streakU + streakL + 0.1)), 0.01, 0.99);
+    const freqOutOfBand = currentFeatures[19] || 0; // frecuencia días fuera de banda en 5d
+
+    // Probabilidad mínima garantizada basada en indicadores técnicos claros
+    // Si hay racha de 4+ días o frecuencia alta de días fuera de banda, la probabilidad debe ser >= 20-40%
+    let minProbThreshold = 0.01;
+    if (streakU >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días sobre techo = alto riesgo alcista
+    if (streakL >= 4) minProbThreshold = Math.max(minProbThreshold, 0.35);  // 4+ días bajo piso = alto riesgo bajista
+    if (streakU >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);  // 3 días = riesgo moderado-alto
+    if (streakL >= 3) minProbThreshold = Math.max(minProbThreshold, 0.20);
+    if (streakU >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);  // 2 días = riesgo moderado
+    if (streakL >= 2) minProbThreshold = Math.max(minProbThreshold, 0.10);
+    if (freqOutOfBand >= 0.40) minProbThreshold = Math.max(minProbThreshold, 0.25); // 40%+ días fuera = riesgo significativo
+    if (freqOutOfBand >= 0.60) minProbThreshold = Math.max(minProbThreshold, 0.40); // 60%+ días fuera = riesgo alto
+
+    // Aplicar probabilidad mínima garantizada
+    const probFinalAdjusted = Math.max(probFinal, minProbThreshold);
+
+    // Dividir entre alcista y bajista según rachas
+    const totalStreak = streakU + streakL + 0.1;
+    let probAlcista = Utils.clamp(probFinalAdjusted * (streakU / totalStreak), 0.01, 0.99);
+    let probBajista = Utils.clamp(probFinalAdjusted * (streakL / totalStreak), 0.01, 0.99);
+
+    // Si solo hay racha en una dirección, concentrar toda la probabilidad ahí
+    if (streakU >= 2 && streakL === 0) {
+      probAlcista = probFinalAdjusted;
+      probBajista = 0.01;
+    } else if (streakL >= 2 && streakU === 0) {
+      probBajista = probFinalAdjusted;
+      probAlcista = 0.01;
+    }
 
     return {
       probModel:      Utils.roundTo(probModel, 4),
@@ -2628,7 +2656,8 @@ const ProbabilityEngine = (() => {
       newsAdjust:     Utils.roundTo(newsAdjust, 4),
       probFinal:      Utils.roundTo(probFinal, 4),
       probAlcista:    Utils.roundTo(probAlcista, 4),
-      probBajista:    Utils.roundTo(probBajista, 4)
+      probBajista:    Utils.roundTo(probBajista, 4),
+      minProbThreshold: Utils.roundTo(minProbThreshold, 4)
     };
   }
 
